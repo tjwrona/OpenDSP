@@ -1,6 +1,7 @@
 add_library(opendsp
     analysis.cpp
     dft.cpp
+    fft.cpp
 )
 
 add_library(opendsp::opendsp

@@ -1,23 +1,12 @@
-#ifndef OPENDSP_DFT_H
-#define OPENDSP_DFT_H
+#pragma once
 
 #include <complex>
 #include <vector>
 
-namespace opendsp {
+#include "signal.h"
 
-/**
- * @brief Computes the discrete Fourier transform of a complex input signal.
- *
- * This function calculates the DFT of a complex input signal using the standard
- * DFT algorithm:
- *
- * @image html "DFT Equation.png"
- *
- * @param[in] x - Discrete sequence of complex time-domain samples
- * @return DFT of the input sequence
- */
-std::vector<std::complex<double>> DFT(const std::vector<std::complex<double>>& x);
+namespace opendsp
+{
 
 /**
  * @brief Computes the discrete Fourier transform of a real input signal.
@@ -34,8 +23,19 @@ std::vector<std::complex<double>> DFT(const std::vector<std::complex<double>>& x
  * @param[in] x - Discrete sequence of real time-domain samples
  * @return DFT of the input sequence
  */
-std::vector<std::complex<double>> DFT(const std::vector<double>& x);
+Signal<std::complex<double>> DFT(const Signal<double>& x);
+
+/**
+ * @brief Computes the discrete Fourier transform of a complex input signal.
+ *
+ * This function calculates the DFT of a complex input signal using the standard
+ * DFT algorithm:
+ *
+ * @image html "DFT Equation.png"
+ *
+ * @param[in] x - Discrete sequence of complex time-domain samples
+ * @return DFT of the input sequence
+ */
+Signal<std::complex<double>> DFT(const Signal<std::complex<double>>& x);
 
 } /* namespace opendsp */
-
-#endif

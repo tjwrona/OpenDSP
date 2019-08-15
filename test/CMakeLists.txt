@@ -3,6 +3,7 @@ include(GoogleTest)
 add_executable(opendsp_test
     main.cpp
     dft_test.cpp
+    fft_test.cpp
 )
 
 target_compile_options(opendsp_test

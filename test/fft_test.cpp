@@ -1,11 +1,12 @@
 #include <cmath>
 #include <gtest/gtest.h>
 #include <opendsp/dft.h>
+#include <opendsp/fft.h>
 #include <opendsp/signal.h>
 
 using namespace opendsp;
 
-TEST(Test1, Test1)
+TEST(FFTTest, Test1)
 {
     int N = 8;
     std::vector<double> samples(N);
@@ -20,7 +21,8 @@ TEST(Test1, Test1)
 
     Signal<double> x(f_s, samples);
 
-    auto X = DFT(x);
+    auto X = FFT(x);
+    auto X2 = DFT(x);
     //auto X_magnitude = Magnitude(X);
     //auto X_power = Power(X);
     //auto X_phase = Phase(X, -120, 1.0);
