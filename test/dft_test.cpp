@@ -2,32 +2,33 @@
 #include <gtest/gtest.h>
 #include <opendsp/dft.h>
 
-//TODO: Remove
-#include <chrono>
-
 using namespace opendsp;
 
-//TODO: Implement real tests
-TEST(Test1, Test1)
+TEST(DFT, DFT)
 {
-    int N = 8;
+    size_t N = 4;
     std::vector<double> x(N);
 
-    int f_s = 8000;
+    int f_s = 4000;
     double t_s = 1.0 / f_s;
 
-    for (int n = 0; n < N; ++n)
+    for (size_t n = 0; n < N; ++n)
     {
-        x[n] = std::sin(2 * M_PI * 1000 * n * t_s) + 0.5 * std::sin(2 * M_PI * 2000 * n * t_s + 3 * M_PI / 4);
+        x[n] = std::sin(2 * M_PI * 1000 * n * t_s);
     }
 
-    std::cout << "start" << std::endl;
-    auto start = std::chrono::high_resolution_clock::now();
     auto X = DFT(x);
-    auto stop = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
-    std::cout << "end - duration: " << duration.count() << " microseconds." << std::endl;
-    //auto X_magnitude = Magnitude(X);
-    //auto X_power = Power(X);
-    //auto X_phase = Phase(X, -120, 1.0);
+
+    ASSERT_EQ(X.size(), x.size());
+
+    double epsilon = std::pow(10.0, -std::numeric_limits<double>::digits10);
+
+    EXPECT_NEAR(X[0].real(), 0.0, epsilon);
+    EXPECT_NEAR(X[0].imag(), 0.0, epsilon);
+    EXPECT_NEAR(X[1].real(), 0.0, epsilon);
+    EXPECT_NEAR(X[1].imag(), -2.0, epsilon);
+    EXPECT_NEAR(X[2].real(), 0.0, epsilon);
+    EXPECT_NEAR(X[2].imag(), 0.0, epsilon);
+    EXPECT_NEAR(X[3].real(), 0.0, epsilon);
+    EXPECT_NEAR(X[3].imag(), 2.0, epsilon);
 }

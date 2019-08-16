@@ -2,6 +2,7 @@ include(GoogleTest)
 
 add_executable(opendsp_test
     main.cpp
+    analysis_test.cpp
     dft_test.cpp
     fft_test.cpp
 )
