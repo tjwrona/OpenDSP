@@ -4,93 +4,95 @@
 #include <complex>
 #include <vector>
 
-#include "dft.h"
-#include "signal.h"
-
 namespace opendsp
 {
 
-static Signal<std::complex<double>> FFTRadix2(const Signal<std::complex<double>>& x);
-static bool IsPowerOf2(size_t x);
-static size_t ReverseBits(const size_t x, const size_t bitCount);
+using namespace std::complex_literals;
 
-//TODO: CLEAN THIS UP!!!
-//      Also this requires some significant error handling
-Signal<std::complex<double>> FFT(const Signal<double>& x)
+static std::vector<std::complex<double>> FFTRadix2(const std::vector<std::complex<double>>& x);
+static bool IsPowerOf2(size_t x);
+static size_t ReverseBits(const size_t x, const size_t n);
+
+std::vector<std::complex<double>> FFT(const std::vector<double>& x)
 {
-    Signal<std::complex<double>> tmp(x.GetSampleRate(), x.GetLength() / 2);
-    for (int i = 0; i < tmp.GetLength(); ++i)
+    size_t N = x.size();
+
+    // Taking advantage of symmetry the FFT of a real signal can be computed
+    // using a single N/2-point complex FFT. Split the input signal into its
+    // even and odd components and load the data into a single complex vector.
+    std::vector<std::complex<double>> x_p(N / 2);
+    for (size_t n = 0; n < N / 2; ++n)
     {
-        tmp[i] = std::complex<double>(x[2 * i], x[2 * i + 1]);
+        // x_p[n] = x[2n] + jx[2n + 1]
+        x_p[n] = std::complex<double>(x[2 * n], x[2 * n + 1]);
     }
 
-    Signal<std::complex<double>> Zn = FFTRadix2(tmp);
+    // Perform the N/2-point complex FFT
+    // TODO: Implement other algorithms for when N is not a power of 2
+    std::vector<std::complex<double>> X_p = FFTRadix2(x_p);
 
-    Signal<std::complex<double>> Xn(Zn.GetSampleRate(), Zn.GetLength() + 1);
-    Signal<std::complex<double>> Yn(Zn.GetSampleRate(), Zn.GetLength() + 1);
-
-    Signal<std::complex<double>> X(x.GetSampleRate(), x.GetLength());
-
-    size_t N = Zn.GetLength();
-    Xn[0] = std::complex<double>(Zn[0].real(), 0);
-    Yn[0] = std::complex<double>(Zn[0].imag(), 0);
-    Xn[N] = std::complex<double>(Zn[N / 2].real(), 0);
-    Yn[N] = std::complex<double>(Zn[N / 2].imag(), 0);
-
-    for (int k = 1; k < N; ++k)
+    // Extract the N-point FFT of the real signal from the results 
+    std::vector<std::complex<double>> X(N);
+    X[0] = X_p[0].real() + X_p[0].imag();
+    for (size_t k = 1; k < N / 2; ++k)
     {
-        Xn[k] = std::complex<double>((Zn[k].real() + Zn[N - k].real()) / 2, (Zn[k].imag() - Zn[N - k].imag()) / 2);
-        Yn[k] = std::complex<double>((Zn[N - k].imag() + Zn[k].imag()) / 2, (Zn[N - k].real() - Zn[k].real()) / 2);
+        // Extract the FFT of the even components
+        auto A = std::complex<double>(
+            (X_p[k].real() + X_p[N / 2 - k].real()) / 2,
+            (X_p[k].imag() - X_p[N / 2 - k].imag()) / 2);
 
-        std::complex<double> W = std::polar(1.0, -2 * M_PI * k / x.GetLength());
-        X[k] = Xn[k] + W * Yn[k];
+        // Extract the FFT of the odd components
+        auto B = std::complex<double>(
+            (X_p[N / 2 - k].imag() + X_p[k].imag()) / 2,
+            (X_p[N / 2 - k].real() - X_p[k].real()) / 2);
 
-        if (k != 0)
-        {
-            X[X.GetLength() - k] = std::conj(X[k]);
-        }
+        // Calculate the twiddle factors
+        auto W = std::polar(1.0, -2 * M_PI * k / N);
+
+        // Sum the results and take advantage of symmetry
+        X[k] = A + W * B;
+        X[k + N / 2] = A - W * B;
     }
 
     return X;
 }
 
-Signal<std::complex<double>> FFT(const Signal<std::complex<double>>& x)
+static std::vector<std::complex<double>> FFTRadix2(const std::vector<std::complex<double>>& x)
 {
-    if (IsPowerOf2(x.GetLength()))
-    {
-        return FFTRadix2(x);
-    }
-    else
-    {
-        return DFT(x);
-    }
-}
+    size_t N = x.size();
 
-static Signal<std::complex<double>> FFTRadix2(const Signal<std::complex<double>>& x)
-{
-    assert(IsPowerOf2(x.GetLength()));
+    // Radix2 FFT requires length of the input signal to be a power of 2
+    assert(IsPowerOf2(N));
 
-    size_t stages = static_cast<size_t>(log2(x.GetLength()));
+    // Calculate how many stages the FFT must compute
+    size_t stages = static_cast<size_t>(log2(N));
 
-    Signal<std::complex<double>> X(x.GetSampleRate(), x.GetLength());
-    for (size_t i = 0; i < x.GetLength(); ++i)
+    // Pre-load the output vector with the input data using bit-reversed indexes
+    std::vector<std::complex<double>> X(N);
+    for (size_t n = 0; n < N; ++n)
     {
-        X[i] = std::complex<double>(x[ReverseBits(i, stages)]);
+        X[n] = std::complex<double>(x[ReverseBits(n, stages)]);
     }
 
+    // Pre-calculate twiddle factors
+    std::vector<std::complex<double>> W(N / 2);
+    for (size_t k = 0; k < N / 2; ++k)
+    {
+        W[k] = std::polar(1.0, -2 * M_PI * k / N);
+    }
+
+    // Calculate the FFT one stage at a time and sum the results
     for (size_t stage = 1; stage <= stages; ++stage)
     {
-        size_t N = static_cast<size_t>(std::pow(2, stage));
-        for (size_t k = 0; k < x.GetLength(); k += N)
+        size_t N_stage = static_cast<size_t>(std::pow(2, stage));
+        size_t W_offset = static_cast<size_t>(std::pow(2, stages - stage));
+        for (size_t k = 0; k < N; k += N_stage)
         {
-            for (size_t n = 0; n < N / 2; ++n)
+            for (size_t n = 0; n < N_stage / 2; ++n)
             {
-                //TODO: Avoid duplicate twiddle factor calcs
-                //TODO: Also consider pre-calculating or cacheing them
-                std::complex<double> W = std::polar(1.0, -2 * M_PI * (k + n) / N);
-                std::complex<double> tmp = X[k + n];
-                X[k + n] = tmp + W * X[k + n + N / 2];
-                X[k + n + N / 2] = tmp - W * X[k + n + N / 2];
+                auto tmp = X[k + n];
+                X[k + n] = tmp + W[n * W_offset] * X[k + n + N_stage / 2];
+                X[k + n + N_stage / 2] = tmp - W[n * W_offset] * X[k + n + N_stage / 2];
             }
         }
     }
@@ -98,15 +100,17 @@ static Signal<std::complex<double>> FFTRadix2(const Signal<std::complex<double>>
     return X;
 }
 
+// Returns true if "x" is a power of 2
 static bool IsPowerOf2(size_t x)
 {
     return x && (!(x & (x - 1)));
 }
 
-static size_t ReverseBits(const size_t x, const size_t bitCount)
+// Given x composed of n bits, returns x with the bits reversed
+static size_t ReverseBits(const size_t x, const size_t n)
 {
     size_t xReversed = 0;
-    for (size_t i = 0; i < bitCount; ++i)
+    for (size_t i = 0; i < n; ++i)
     {
         xReversed = (xReversed << 1U) | ((x >> i) & 1U);
     }

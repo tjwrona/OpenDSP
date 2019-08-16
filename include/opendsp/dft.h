@@ -3,8 +3,6 @@
 #include <complex>
 #include <vector>
 
-#include "signal.h"
-
 namespace opendsp
 {
 
@@ -23,7 +21,7 @@ namespace opendsp
  * @param[in] x - Discrete sequence of real time-domain samples
  * @return DFT of the input sequence
  */
-Signal<std::complex<double>> DFT(const Signal<double>& x);
+std::vector<std::complex<double>> DFT(const std::vector<double>& x);
 
 /**
  * @brief Computes the discrete Fourier transform of a complex input signal.
@@ -36,6 +34,6 @@ Signal<std::complex<double>> DFT(const Signal<double>& x);
  * @param[in] x - Discrete sequence of complex time-domain samples
  * @return DFT of the input sequence
  */
-Signal<std::complex<double>> DFT(const Signal<std::complex<double>>& x);
+std::vector<std::complex<double>> DFT(const std::vector<std::complex<double>>& x);
 
 } /* namespace opendsp */
