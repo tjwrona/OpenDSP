@@ -63,7 +63,7 @@ std::vector<std::complex<double>> FFT(const std::vector<double>& x)
 
         // Sum the results and take advantage of symmetry
         X[k] = A + W[k] * B;
-        X[k + N / 2] = A - W[k] * B;
+        X[N - k] = std::conj(X[k]);
     }
 
     return X;
