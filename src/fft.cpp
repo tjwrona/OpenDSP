@@ -18,21 +18,23 @@ std::vector<std::complex<double>> FFT(const std::vector<double>& x)
     // Radix2 FFT requires length of the input signal to be a power of 2
     // TODO: Implement other algorithms for when N is not a power of 2
     assert(IsPowerOf2(N));
+    size_t NOver2 = N / 2;
 
     // Taking advantage of symmetry the FFT of a real signal can be computed
     // using a single N/2-point complex FFT. Split the input signal into its
     // even and odd components and load the data into a single complex vector.
-    std::vector<std::complex<double>> x_p(N / 2);
-    for (size_t n = 0; n < N / 2; ++n)
+    std::vector<std::complex<double>> x_p(NOver2);
+    for (size_t n = 0; n < NOver2; ++n)
     {
         // x_p[n] = x[2n] + jx[2n + 1]
-        x_p[n] = std::complex<double>(x[2 * n], x[2 * n + 1]);
+        auto nTimes2 = n * 2;
+        x_p[n] = std::complex<double>(x[nTimes2], x[nTimes2 + 1]);
     }
 
     // Pre-calculate twiddle factors
-    std::vector<std::complex<double>> W(N / 2);
-    std::vector<std::complex<double>> W_p(N / 4);
-    for (size_t k = 0; k < N / 2; ++k)
+    std::vector<std::complex<double>> W(NOver2);
+    std::vector<std::complex<double>> W_p(NOver2 / 2);
+    for (size_t k = 0; k < NOver2; ++k)
     {
         W[k] = std::polar(1.0, -2 * M_PI * k / N);
 
@@ -49,21 +51,24 @@ std::vector<std::complex<double>> FFT(const std::vector<double>& x)
     // Extract the N-point FFT of the real signal from the results 
     std::vector<std::complex<double>> X(N);
     X[0] = X_p[0].real() + X_p[0].imag();
-    for (size_t k = 1; k < N / 2; ++k)
+    for (size_t k = 1; k < NOver2; ++k)
     {
+        auto l = NOver2 - k;
+
         // Extract the FFT of the even components
         auto A = std::complex<double>(
-            (X_p[k].real() + X_p[N / 2 - k].real()) / 2,
-            (X_p[k].imag() - X_p[N / 2 - k].imag()) / 2);
+            (X_p[k].real() + X_p[l].real()) / 2,
+            (X_p[k].imag() - X_p[l].imag()) / 2);
 
         // Extract the FFT of the odd components
         auto B = std::complex<double>(
-            (X_p[N / 2 - k].imag() + X_p[k].imag()) / 2,
-            (X_p[N / 2 - k].real() - X_p[k].real()) / 2);
+            (X_p[l].imag() + X_p[k].imag()) / 2,
+            (X_p[l].real() - X_p[k].real()) / 2);
 
         // Sum the results and take advantage of symmetry
-        X[k] = A + W[k] * B;
-        X[N - k] = std::conj(X[k]);
+        auto tmp = W[k] * B;
+        X[k] = A + tmp;
+        X[k + NOver2] = A - tmp;
     }
 
     return X;
@@ -76,10 +81,11 @@ std::vector<std::complex<double>> FFT(const std::vector<std::complex<double>>& x
     // Radix2 FFT requires length of the input signal to be a power of 2
     // TODO: Implement other algorithms for when N is not a power of 2
     assert(IsPowerOf2(N));
+    size_t NOver2 = N / 2;
 
     // Pre-calculate twiddle factors
-    std::vector<std::complex<double>> W(N / 2);
-    for (size_t k = 0; k < N / 2; ++k)
+    std::vector<std::complex<double>> W(NOver2);
+    for (size_t k = 0; k < NOver2; ++k)
     {
         W[k] = std::polar(1.0, -2 * M_PI * k / N);
     }
@@ -93,6 +99,7 @@ static std::vector<std::complex<double>> FFTRadix2(const std::vector<std::comple
 
     // Radix2 FFT requires length of the input signal to be a power of 2
     assert(IsPowerOf2(N));
+    size_t NOver2 = N / 2;
 
     // Calculate how many stages the FFT must compute
     size_t stages = static_cast<size_t>(log2(N));
@@ -105,19 +112,26 @@ static std::vector<std::complex<double>> FFTRadix2(const std::vector<std::comple
     }
 
     // Calculate the FFT one stage at a time and sum the results
+    size_t NPreviousStage = 1;
+    size_t NStage = 2;
+    size_t WOffset = NOver2;
     for (size_t stage = 1; stage <= stages; ++stage)
     {
-        size_t N_stage = static_cast<size_t>(std::pow(2, stage));
-        size_t W_offset = static_cast<size_t>(std::pow(2, stages - stage));
-        for (size_t k = 0; k < N; k += N_stage)
+        for (size_t k = 0; k < N; k += NStage)
         {
-            for (size_t n = 0; n < N_stage / 2; ++n)
+            for (size_t n = 0; n < NPreviousStage; ++n)
             {
-                auto tmp = X[k + n];
-                X[k + n] = tmp + W[n * W_offset] * X[k + n + N_stage / 2];
-                X[k + n + N_stage / 2] = tmp - W[n * W_offset] * X[k + n + N_stage / 2];
+                auto index1 = k + n;
+                auto index2 = index1 + NPreviousStage;
+                auto tmp1 = X[index1];
+                auto tmp2 = W[n * WOffset] * X[index2];
+                X[index1] = tmp1 + tmp2;
+                X[index2] = tmp1 - tmp2;
             }
         }
+        NPreviousStage = NStage;
+        NStage *= 2;
+        WOffset /= 2;
     }
 
     return X;
