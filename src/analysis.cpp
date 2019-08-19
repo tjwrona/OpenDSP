@@ -7,45 +7,52 @@
 namespace opendsp
 {
 
+using std::abs;
+using std::arg;
+using std::complex;
+using std::norm;
+using std::transform;
+using std::vector;
+
 double Magnitude(const double value)
 {
-    return std::abs(value);
+    return abs(value);
 }
 
-double Magnitude(const std::complex<double>& value)
+double Magnitude(const complex<double>& value)
 {
-    return std::abs(value);
+    return abs(value);
 }
 
-std::vector<double> Magnitude(const std::vector<double>& x)
+vector<double> Magnitude(const vector<double>& x)
 {
-    std::vector<double> x_magnitude(x.size());
-    std::transform(x.begin(), x.end(), x_magnitude.begin(), [](const double value) {
+    vector<double> x_magnitude(x.size());
+    transform(x.begin(), x.end(), x_magnitude.begin(), [](const double value) {
         return Magnitude(value);
         });
 
     return x_magnitude;
 }
 
-std::vector<double> Magnitude(const std::vector<std::complex<double>>& x)
+vector<double> Magnitude(const vector<complex<double>>& x)
 {
-    std::vector<double> x_magnitude(x.size());
-    std::transform(x.begin(), x.end(), x_magnitude.begin(), [](const std::complex<double>& value) {
+    vector<double> x_magnitude(x.size());
+    transform(x.begin(), x.end(), x_magnitude.begin(), [](const complex<double>& value) {
         return Magnitude(value);
         });
 
     return x_magnitude;
 }
 
-double Phase(const std::complex<double>& value)
+double Phase(const complex<double>& value)
 {
-    return std::arg(value);
+    return arg(value);
 }
 
-std::vector<double> Phase(const std::vector<std::complex<double>>& x)
+vector<double> Phase(const vector<complex<double>>& x)
 {
-    std::vector<double> x_phase(x.size());
-    std::transform(x.begin(), x.end(), x_phase.begin(), [](const std::complex<double>& value) {
+    vector<double> x_phase(x.size());
+    transform(x.begin(), x.end(), x_phase.begin(), [](const complex<double>& value) {
         return Phase(value);
         });
 
@@ -54,28 +61,28 @@ std::vector<double> Phase(const std::vector<std::complex<double>>& x)
 
 double Power(const double value)
 {
-    return std::norm(value);
+    return norm(value);
 }
 
-double Power(const std::complex<double>& value)
+double Power(const complex<double>& value)
 {
-    return std::norm(value);
+    return norm(value);
 }
 
-std::vector<double> Power(const std::vector<double>& x)
+vector<double> Power(const vector<double>& x)
 {
-    std::vector<double> x_power(x.size());
-    std::transform(x.begin(), x.end(), x_power.begin(), [](const double value) {
+    vector<double> x_power(x.size());
+    transform(x.begin(), x.end(), x_power.begin(), [](const double value) {
         return Power(value);
         });
 
     return x_power;
 }
 
-std::vector<double> Power(const std::vector<std::complex<double>>& x)
+vector<double> Power(const vector<complex<double>>& x)
 {
-    std::vector<double> x_power(x.size());
-    std::transform(x.begin(), x.end(), x_power.begin(), [](const std::complex<double>& value) {
+    vector<double> x_power(x.size());
+    transform(x.begin(), x.end(), x_power.begin(), [](const complex<double>& value) {
         return Power(value);
         });
 
