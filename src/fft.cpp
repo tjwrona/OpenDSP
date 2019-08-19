@@ -1,6 +1,5 @@
 #include "fft.h"
 
-#include <bitset>
 #include <cassert>
 #include <complex>
 #include <vector>
@@ -8,23 +7,20 @@
 namespace opendsp
 {
 
-using std::bitset;
 using std::complex;
 using std::polar;
 using std::vector;
 
-static vector<complex<double>> FFTRadix2(const vector<complex<double>>& x, const vector<complex<double>>& W);
+static vector<complex<double>> FFTStockham(const vector<complex<double>>& x, const vector<complex<double>>& W);
 static bool IsPowerOf2(size_t x);
-
-static constexpr size_t wordSize = sizeof(size_t) * 8;
 
 vector<complex<double>> FFT(const vector<double>& x)
 {
     const size_t N = x.size();
 
-    // Radix2 FFT requires length of the input signal to be a power of 2
     // TODO: Implement other algorithms for when N is not a power of 2
     assert(IsPowerOf2(N));
+
     const size_t NOver2 = N / 2;
 
     // Taking advantage of symmetry the FFT of a real signal can be computed
@@ -46,7 +42,7 @@ vector<complex<double>> FFT(const vector<double>& x)
     {
         W[k] = polar(1.0, k * twiddleConstant);
 
-        // The N/2-point complex DFT uses only the even twiddle factors
+        // The N/2-point complex FFT uses only the even twiddle factors
         if (k % 2 == 0)
         {
             W_p[k / 2] = W[k];
@@ -54,29 +50,28 @@ vector<complex<double>> FFT(const vector<double>& x)
     }
 
     // Perform the N/2-point complex FFT
-    vector<complex<double>> X_p = FFTRadix2(x_p, W_p);
+    vector<complex<double>> X_p = FFTStockham(x_p, W_p);
 
     // Extract the N-point FFT of the real signal from the results 
     vector<complex<double>> X(N);
     X[0] = X_p[0].real() + X_p[0].imag();
     for (size_t k = 1; k < NOver2; ++k)
     {
-        const auto l = NOver2 - k;
+        const auto NOver2MinusK = NOver2 - k;
 
         // Extract the FFT of the even components
         const auto A = complex<double>(
-            (X_p[k].real() + X_p[l].real()) / 2,
-            (X_p[k].imag() - X_p[l].imag()) / 2);
+            (X_p[k].real() + X_p[NOver2MinusK].real()) / 2,
+            (X_p[k].imag() - X_p[NOver2MinusK].imag()) / 2);
 
         // Extract the FFT of the odd components
         const auto B = complex<double>(
-            (X_p[l].imag() + X_p[k].imag()) / 2,
-            (X_p[l].real() - X_p[k].real()) / 2);
+            (X_p[NOver2MinusK].imag() + X_p[k].imag()) / 2,
+            (X_p[NOver2MinusK].real() - X_p[k].real()) / 2);
 
-        // Sum the results and take advantage of symmetry
-        const auto tmp = W[k] * B;
-        X[k] = A + tmp;
-        X[k + NOver2] = A - tmp;
+        // Sum the results
+        X[k] = A + W[k] * B;
+        X[N - k] = conj(X[k]); // (>*.*)> symmetry! <(*.*<)
     }
 
     return X;
@@ -86,9 +81,9 @@ vector<complex<double>> FFT(const vector<complex<double>>& x)
 {
     const size_t N = x.size();
 
-    // Radix2 FFT requires length of the input signal to be a power of 2
     // TODO: Implement other algorithms for when N is not a power of 2
     assert(IsPowerOf2(N));
+
     const size_t NOver2 = N / 2;
 
     // Pre-calculate twiddle factors
@@ -99,55 +94,48 @@ vector<complex<double>> FFT(const vector<complex<double>>& x)
         W[k] = polar(1.0, k * twiddleConstant);
     }
 
-    return FFTRadix2(x, W);
+    return FFTStockham(x, W);
 }
 
-static vector<complex<double>> FFTRadix2(const vector<complex<double>>& x, const vector<complex<double>>& W)
+static vector<complex<double>> FFTStockham(const vector<complex<double>>& x, const vector<complex<double>>& W)
 {
     const size_t N = x.size();
 
-    // Radix2 FFT requires length of the input signal to be a power of 2
+    // TODO: Implement other algorithms for when N is not a power of 2
     assert(IsPowerOf2(N));
+
     const size_t NOver2 = N / 2;
 
-    // Calculate how many stages the FFT must compute
-    const size_t stages = static_cast<size_t>(log2(N));
+    vector<complex<double>> a(x);
+    vector<complex<double>> b(N);
 
-    // Pre-load the output vector with the input data using bit-reversed indexes
-    vector<complex<double>> X(N);
-    size_t nReversed = 0;
-    for (size_t n = 0; n < N; ++n)
+    size_t WStride = NOver2;
+    for (size_t stride = 1; stride < N; stride *= 2)
     {
-        X[n] = x[nReversed];
-        const size_t change = n ^ (n + 1);
-        const bitset<wordSize> bits(~change);
-        nReversed ^= change << (bits.count() - (wordSize - stages));
-    }
-
-    // Calculate the FFT one stage at a time and sum the results
-    size_t NPreviousStage = 1;
-    size_t NStage = 2;
-    size_t WOffset = NOver2;
-    for (size_t stage = 1; stage <= stages; ++stage)
-    {
-        for (size_t k = 0; k < N; k += NStage)
+        for (size_t k = 0; k < NOver2; k += stride)
         {
-            for (size_t n = 0; n < NPreviousStage; ++n)
+            const auto kTimes2 = k * 2;
+            for (size_t n = 0; n < stride; ++n)
             {
-                const auto index1 = k + n;
-                const auto index2 = index1 + NPreviousStage;
-                const auto tmp1 = X[index1];
-                const auto tmp2 = W[n * WOffset] * X[index2];
-                X[index1] = tmp1 + tmp2;
-                X[index2] = tmp1 - tmp2;
+                const auto aIndex1 = n + k;
+                const auto aIndex2 = aIndex1 + NOver2;
+
+                const auto bIndex1 = n + kTimes2;
+                const auto bIndex2 = bIndex1 + stride;
+
+                const auto tmp1 = a[aIndex1];
+                const auto tmp2 = W[n * WStride] * a[aIndex2];
+
+                b[bIndex1] = tmp1 + tmp2;
+                b[bIndex2] = tmp1 - tmp2; // (>*.*)> symmetry! <(*.*<)
             }
         }
-        NPreviousStage = NStage;
-        NStage *= 2;
-        WOffset /= 2;
+
+        WStride /= 2;
+        a.swap(b);
     }
 
-    return X;
+    return a;
 }
 
 // Returns true if x is a power of 2
