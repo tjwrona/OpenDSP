@@ -33,3 +33,9 @@ TEST(FFT, FFT)
         EXPECT_NEAR(X[k].imag(), X2[k].imag(), epsilon);
     }
 }
+
+TEST(FFT, IFFT)
+{
+    //TODO: Implement tests
+    FAIL();
+}
