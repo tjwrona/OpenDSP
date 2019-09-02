@@ -10,58 +10,45 @@ namespace opendsp
 
 using std::complex;
 using std::conj;
+using std::multiplies;
 using std::polar;
 using std::transform;
 using std::vector;
 
+static vector<complex<double>> BluesteinFFT(const vector<complex<double>>& x);
+static vector<complex<double>> Convolve(const vector<complex<double>>& a, const vector<complex<double>>& b);
+static bool IsEven(const size_t value);
 static bool IsPowerOf2(const size_t value);
+static size_t NextPowerOf2(const size_t value);
 static vector<complex<double>> StockhamFFT(const vector<double>& x);
 static vector<complex<double>> StockhamFFT(const vector<complex<double>>& x);
 static vector<complex<double>> StockhamFFT(const vector<complex<double>>& x, const vector<complex<double>>& W);
 
 vector<complex<double>> FFT(const vector<double>& x)
 {
-    // TODO: Implement other algorithms for when N is not a power of 2
-    assert(IsPowerOf2(x.size()));
-    return StockhamFFT(x);
-}
-
-vector<complex<double>> FFT(const vector<complex<double>>& x)
-{
-    // TODO: Implement other algorithms for when N is not a power of 2
-    assert(IsPowerOf2(x.size()));
-    return StockhamFFT(x);
-}
-
-vector<complex<double>> IFFT(const vector<complex<double>>& X)
-{
-    // TODO: Implement other algorithms for when N is not a power of 2
-    assert(IsPowerOf2(X.size()));
-
-    vector<complex<double>> X_p(X.size());
-    transform(X.begin(), X.end(), X_p.begin(), [](const complex<double>& value) {
-        return conj(value);
-        });
-
-    const auto x_p = StockhamFFT(X_p);
-
-    vector<complex<double>> x(x_p.size());
-    transform(x_p.begin(), x_p.end(), x.begin(), [](const complex<double>& value) {
-        return conj(value);
-        });
-}
-
-// Returns true if x is a power of 2
-static bool IsPowerOf2(const size_t value)
-{
-    return value && (!(value & (value - 1)));
-}
-
-vector<complex<double>> StockhamFFT(const vector<double>& x)
-{
-    assert(IsPowerOf2(x.size()));
     const size_t N = x.size();
+
+    // TODO: See if further optimization can be done for odd values of N
+    // If N is odd, just perform the complex FFT
+    if (!IsEven(N))
+    {
+        vector<complex<double>> x_p(N);
+        transform(x.begin(), x.end(), x_p.begin(), [](const double value) {
+            return complex<double>(value);
+            });
+
+        return FFT(x_p);
+    }
+
     const size_t NOver2 = N / 2;
+
+    // Calculate twiddle factors
+    vector<complex<double>> W(NOver2);
+    const auto omega = 2.0 * M_PI / N;
+    for (size_t n = 0; n < NOver2; ++n)
+    {
+        W[n] = polar(1.0, -omega * n);
+    }
 
     // Taking advantage of symmetry the FFT of a real signal can be computed
     // using a single N/2-point complex FFT. Split the input signal into its
@@ -75,47 +62,153 @@ vector<complex<double>> StockhamFFT(const vector<double>& x)
         x_p[n] = complex<double>(x[nTimes2], x[nTimes2 + 1]);
     }
 
-    // Pre-calculate twiddle factors
+    // Perform the complex FFT
+    const auto X_p = IsPowerOf2(N)
+        ? StockhamFFT(x_p)
+        : BluesteinFFT(x_p);
+
+    //TODO: Fix this section (See TI-FFT.pdf)
+    //vector<complex<double>> X(N);
+    //X[0] = X_p[0].real() + X_p[0].imag();
+    //for (size_t k = 1; k < NOver2; ++k)
+    //{
+    //    const auto NOver2MinusK = NOver2 - k;
+
+    //    // Extract the FFT of the even components
+    //    const auto A = complex<double>(
+    //        (X_p[k].real() + X_p[NOver2MinusK].real()) / 2,
+    //        (X_p[k].imag() - X_p[NOver2MinusK].imag()) / 2);
+
+    //    // Extract the FFT of the odd components
+    //    const auto B = complex<double>(
+    //        (X_p[NOver2MinusK].imag() + X_p[k].imag()) / 2,
+    //        (X_p[NOver2MinusK].real() - X_p[k].real()) / 2);
+
+    //    // Sum the results
+    //    X[k] = A + W[k] * B;
+    //    X[N - k] = conj(X[k]); // (>*.*)> symmetry! <(*.*<)
+    //}
+
+    return X;
+}
+
+vector<complex<double>> FFT(const vector<complex<double>>& x)
+{
+    const size_t N = x.size();
+
+    return IsPowerOf2(N)
+        ? StockhamFFT(x)
+        : BluesteinFFT(x);
+}
+
+vector<complex<double>> IFFT(const vector<complex<double>>& X)
+{
+    const size_t N = X.size();
+
+    vector<complex<double>> X_p(N);
+    transform(X.begin(), X.end(), X_p.begin(), [](const complex<double>& value) {
+        return conj(value);
+        });
+
+    const auto x_p = FFT(X_p);
+
+    vector<complex<double>> x(N);
+    transform(x_p.begin(), x_p.end(), x.begin(), [=](const complex<double>& value) {
+        return conj(value) / static_cast<double>(N);
+        });
+
+    return x;
+}
+
+static vector<complex<double>> BluesteinFFT(const vector<complex<double>>& x)
+{
+    const size_t N = x.size();
+
+    // To avoid issues with convolution periodicity, the convolution size must
+    // be at least 2 * N - 1
+    const size_t M = NextPowerOf2(2 * N - 1);
+
+    // Calculate the "phase factors"
+    vector<complex<double>> P(N);
+    for (size_t n = 0; n < N; ++n)
+    {
+        // % (2 * N) is done to improve accuracy of floating point trigonometry
+        P[n] = polar(1.0, -M_PI * ((n * n) % (2 * N)) / N);
+    }
+
+    // Construct the two sequences to perform convolution
+    vector<complex<double>> a(M);
+    vector<complex<double>> b(M);
+    a[0] = x[0] * P[0];
+    b[0] = P[0];
+    for (size_t n = 1; n < N; ++n)
+    {
+        a[n] = x[n] * P[n];
+        b[n] = b[M - n] = conj(P[n]); // (>*.*)> symmetry! <(*.*<)
+    }
+
+    const auto c = Convolve(a, b);
+
+    // Mutiply by the "phase factors" to obtain the correct results
+    vector<complex<double>> X(N);
+    for (size_t k = 0; k < N; ++k)
+    {
+        X[k] = c[k] * P[k];
+    }
+
+    return X;
+}
+
+// Note that this is specialized for performing the Bluestein FFT efficiently.
+// This is not a general purpose convolution algorithm.
+static vector<complex<double>> Convolve(const vector<complex<double>>& a, const vector<complex<double>>& b)
+{
+    assert(IsPowerOf2(a.size()));
+    assert(a.size() == b.size());
+    const size_t N = a.size();
+    const size_t NOver2 = N / 2;
+
+    // Pre-calculate the twiddle factors
     vector<complex<double>> W(NOver2);
-    vector<complex<double>> W_p(NOver2 / 2);
     const auto omega = 2.0 * M_PI / N;
     for (size_t n = 0; n < NOver2; ++n)
     {
         W[n] = polar(1.0, -omega * n);
-
-        // The N/2-point complex FFT uses only the even twiddle factors
-        if (n % 2 == 0)
-        {
-            W_p[n / 2] = W[n];
-        }
     }
 
-    // Perform the N/2-point complex FFT
-    vector<complex<double>> X_p = StockhamFFT(x_p, W_p);
+    const auto A = StockhamFFT(a, W);
+    const auto B = StockhamFFT(b, W);
 
-    // Extract the N-point FFT of the real signal from the results 
-    vector<complex<double>> X(N);
-    X[0] = X_p[0].real() + X_p[0].imag();
-    for (size_t k = 1; k < NOver2; ++k)
+    // The convolution theorem states that multiplication in the frequency
+    // domain is equivalent to convolution in the time domain
+    vector<complex<double>> C(N);
+    transform(A.begin(), A.end(), B.begin(), C.begin(), multiplies<complex<double>>());
+
+    return IFFT(C);
+}
+
+// Returns true if the provided value is even
+static bool IsEven(const size_t value)
+{
+    return !(value % 2);
+}
+
+// Returns true if the provided value is a power of 2
+static bool IsPowerOf2(const size_t value)
+{
+    return value && (!(value & (value - 1)));
+}
+
+// Returns the next power of 2 greater than or equal to the provided value
+static size_t NextPowerOf2(const size_t value)
+{
+    size_t result = 1;
+    while (result < value)
     {
-        const auto NOver2MinusK = NOver2 - k;
-
-        // Extract the FFT of the even components
-        const auto A = complex<double>(
-            (X_p[k].real() + X_p[NOver2MinusK].real()) / 2,
-            (X_p[k].imag() - X_p[NOver2MinusK].imag()) / 2);
-
-        // Extract the FFT of the odd components
-        const auto B = complex<double>(
-            (X_p[NOver2MinusK].imag() + X_p[k].imag()) / 2,
-            (X_p[NOver2MinusK].real() - X_p[k].real()) / 2);
-
-        // Sum the results
-        X[k] = A + W[k] * B;
-        X[N - k] = conj(X[k]); // (>*.*)> symmetry! <(*.*<)
+        result <<= 1;
     }
 
-    return X;
+    return result;
 }
 
 static vector<complex<double>> StockhamFFT(const vector<complex<double>>& x)

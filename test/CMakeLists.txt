@@ -8,7 +8,8 @@ add_executable(opendsp_test
 )
 
 target_compile_options(opendsp_test
-  PRIVATE -D_USE_MATH_DEFINES
+  PRIVATE
+    -D_USE_MATH_DEFINES
 )
 
 target_link_libraries(opendsp_test
