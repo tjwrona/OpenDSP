@@ -6,9 +6,9 @@ signal processing algorithms.
 ## Documentation
 
 The available functions are documented with Doxygen style comments in the C++
-header files. For now the easiest way to view it is by simply opening the header
-files and reading the comments, but I plan on finding a way to actually build
-and publish the documentation in the near future.
+header files. For now the easiest way to view the documentation is by simply
+opening the header files and reading the comments, but I plan on finding a way
+to actually build and formally publish the documentation in the near future.
 
 ## Disclaimer
 
