@@ -7,7 +7,7 @@ using namespace opendsp;
 
 TEST(FFT, FFT)
 {
-    for (size_t N = 1; N <= 10; ++N)
+    for (size_t N = 1; N <= 100; ++N)
     {
         std::vector<double> x(N);
 

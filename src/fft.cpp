@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 #include <complex>
+#include <functional>
 #include <vector>
 
 namespace opendsp
@@ -24,6 +25,9 @@ static vector<complex<double>> StockhamFFT(const vector<double>& x);
 static vector<complex<double>> StockhamFFT(const vector<complex<double>>& x);
 static vector<complex<double>> StockhamFFT(const vector<complex<double>>& x, const vector<complex<double>>& W);
 
+// The FFT of a real input signal is much more complicated because this function
+// takes advantage of symmetry in the output in order to drastically improve
+// performance
 vector<complex<double>> FFT(const vector<double>& x)
 {
     const size_t N = x.size();
@@ -42,14 +46,6 @@ vector<complex<double>> FFT(const vector<double>& x)
 
     const size_t NOver2 = N / 2;
 
-    // Calculate twiddle factors
-    vector<complex<double>> W(NOver2);
-    const auto omega = 2.0 * M_PI / N;
-    for (size_t n = 0; n < NOver2; ++n)
-    {
-        W[n] = polar(1.0, -omega * n);
-    }
-
     // Taking advantage of symmetry the FFT of a real signal can be computed
     // using a single N/2-point complex FFT. Split the input signal into its
     // even and odd components and load the data into a single complex vector.
@@ -62,36 +58,53 @@ vector<complex<double>> FFT(const vector<double>& x)
         x_p[n] = complex<double>(x[nTimes2], x[nTimes2 + 1]);
     }
 
+    // Pre-calculate twiddle factors
+    vector<complex<double>> W(NOver2);
+    const auto omega = 2.0 * M_PI / N;
+    for (size_t n = 0; n < NOver2; ++n)
+    {
+        W[n] = polar(1.0, -omega * n);
+    }
+
+    // TODO: Make even faster by pre-calculating twiddle factors and passing
+    //       them to the Stockham and Bluestein algorithms
     // Perform the complex FFT
-    const auto X_p = IsPowerOf2(N)
+    auto X_p = IsPowerOf2(N)
         ? StockhamFFT(x_p)
         : BluesteinFFT(x_p);
 
-    //TODO: Fix this section (See TI-FFT.pdf)
-    //vector<complex<double>> X(N);
-    //X[0] = X_p[0].real() + X_p[0].imag();
-    //for (size_t k = 1; k < NOver2; ++k)
-    //{
-    //    const auto NOver2MinusK = NOver2 - k;
+    // The FFT is periodic so it is valid append X_p[0] to the end. This is
+    // required to avoid a buffer overflow in the next section.
+    X_p.push_back(X_p[0]);
 
-    //    // Extract the FFT of the even components
-    //    const auto A = complex<double>(
-    //        (X_p[k].real() + X_p[NOver2MinusK].real()) / 2,
-    //        (X_p[k].imag() - X_p[NOver2MinusK].imag()) / 2);
+    // Extract the real FFT from the output of the complex FFT
+    vector<complex<double>> X(N);
+    for (size_t k = 0; k < NOver2; ++k)
+    {
+        const auto NOver2MinusK = NOver2 - k;
 
-    //    // Extract the FFT of the odd components
-    //    const auto B = complex<double>(
-    //        (X_p[NOver2MinusK].imag() + X_p[k].imag()) / 2,
-    //        (X_p[NOver2MinusK].real() - X_p[k].real()) / 2);
+        // Extract the FFT of the even components
+        const auto A = complex<double>(
+            (X_p[k].real() + X_p[NOver2MinusK].real()) / 2,
+            (X_p[k].imag() - X_p[NOver2MinusK].imag()) / 2);
 
-    //    // Sum the results
-    //    X[k] = A + W[k] * B;
-    //    X[N - k] = conj(X[k]); // (>*.*)> symmetry! <(*.*<)
-    //}
+        // Extract the FFT of the odd components
+        const auto B = complex<double>(
+            (X_p[NOver2MinusK].imag() + X_p[k].imag()) / 2,
+            (X_p[NOver2MinusK].real() - X_p[k].real()) / 2);
+
+        const auto tmp1 = A;
+        const auto tmp2 = W[k] * B;
+
+        // Sum the results
+        X[k] = tmp1 + tmp2;
+        X[k + NOver2] = tmp1 - tmp2; // (>*.*)> symmetry! <(*.*<)
+    }
 
     return X;
 }
 
+// Performs the FFT of a complex input signal
 vector<complex<double>> FFT(const vector<complex<double>>& x)
 {
     const size_t N = x.size();
@@ -101,6 +114,9 @@ vector<complex<double>> FFT(const vector<complex<double>>& x)
         : BluesteinFFT(x);
 }
 
+// TODO: Investigate whether there is a more optimized implement the IFFT when
+//       the result is a real signal
+// Performs the inverse FFT of a complex input signal
 vector<complex<double>> IFFT(const vector<complex<double>>& X)
 {
     const size_t N = X.size();
@@ -120,6 +136,7 @@ vector<complex<double>> IFFT(const vector<complex<double>>& X)
     return x;
 }
 
+// C++ implementation of the Bluestein FFT algorithm
 static vector<complex<double>> BluesteinFFT(const vector<complex<double>>& x)
 {
     const size_t N = x.size();
@@ -211,6 +228,7 @@ static size_t NextPowerOf2(const size_t value)
     return result;
 }
 
+// C++ implementation of the Stockam FFT algorithm
 static vector<complex<double>> StockhamFFT(const vector<complex<double>>& x)
 {
     assert(IsPowerOf2(x.size()));
@@ -228,6 +246,7 @@ static vector<complex<double>> StockhamFFT(const vector<complex<double>>& x)
     return StockhamFFT(x, W);
 }
 
+// C++ implementation of the Stockam FFT algorithm
 static vector<complex<double>> StockhamFFT(const vector<complex<double>>& x, const vector<complex<double>>& W)
 {
     assert(IsPowerOf2(x.size()));
