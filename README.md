@@ -22,7 +22,7 @@ make it public now because others may find it useful.
 * C++11 compliant compiler (or later)
 * Conan package manager v1.18.1 (or later)
 
-# Dependencies
+## Dependencies
 
 This project requires the Conan package manager to automatically manage all of
 its dependencies. To install Conan see:
