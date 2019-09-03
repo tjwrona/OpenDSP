@@ -16,7 +16,17 @@ This library is still a work in progress, but since it can already calculate
 fast Fourier transforms of arbitrary sizes relatively quickly I am choosing to
 make it public now because others may find it useful.
 
-# Build Requirements
+# Build Instructions
+
+OpenDSP can be built as a standalone CMake project.
+
+    mkdir build
+    cmake -H. -Bbuild
+
+Then run your platform specific build tool to compile the code using the
+generated native build scripts
+
+## Requirements
 
 * CMake v3.14.0 (or later)
 * C++11 compliant compiler (or later)
