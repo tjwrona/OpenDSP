@@ -24,7 +24,7 @@ OpenDSP can be built as a standalone CMake project.
     cmake -H. -Bbuild
 
 Then run your platform specific build tool to compile the code using the
-generated native build scripts
+generated native build scripts.
 
 ## Requirements
 
